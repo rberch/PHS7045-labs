@@ -1,8 +1,8 @@
 ---
 title: "Lab 03 - Functions and data.table"
-format:
-  html:
-    embed-resources: true
+format: gfm
+editor_options:
+  chunk_ouput_type: inline
 ---
 
 # Learning goals
