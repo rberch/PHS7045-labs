@@ -1,0 +1,214 @@
+---
+title: "Lab 02 - R Essentials"
+format:
+  html:
+    embed-resources: yes
+output:
+  html_document:
+    df_print: paged
+---
+
+# Learning goals
+
+Today’s lab is the first steps toward designing a response-adaptive randomization (RAR) trial.  RAR designs are used in precision medicine trials, such as the [BATTLE trial](https://aacrjournals.org/cancerdiscovery/article/1/1/44/2198?casa_token=pK1gZcX-FgkAAAAA:KmsD6qnoaOMxqHJlg0VGlmqr2nqIl49Xupuh0FX7nnJXNjtdBwVWsdmVtUIXKdEWQ_e5i9pG), to gather early evidence of treatment arms that work best for a given biomarker.  Throughout RAR, the treatment allocation adjusts depending on which treatment arm looks most promising.  We will focus on the initial steps of coding this design.
+
+The lab is motivated by the paper by Kurt Viele: [Comparison of methods for control allocation in multiple arm studies using response adaptive randomization](https://journals.sagepub.com/doi/pdf/10.1177/1740774519877836).  It practices:
+
+* Pre-allocating vectors
+* Using a loop
+* Writing a function
+
+# Notation 
+
+Notation and criteria for study to successfully declare a treatment as efficacious:
+
+* $i = 1, \dots, N$ participants
+* $t = 0, 1, 2, 3$ study arms ($t = 0$ is control)
+* $Y_i \mid t \sim$ Bern($p_t$) and $y_t$ is a vector of $n_t$ observed outcomes on arm $t$
+* The prior on $p_t \sim$ Beta($\alpha_t, \beta_t$)
+
+Posterior Distribution Pr($p_t$ | $y_t$) $\sim$ Beta($\alpha_t + \sum y_t, \beta_t + n_t - \sum y_t$)
+
+Quoting from the paper: The trial is considered successful at the final analysis if there is a high posterior probability that at least one arm has a higher rate than control.
+
+max$_t$ Pr( $p_t > p_0$ ) > $\delta$
+
+where $\delta$ is a threshold chosen to maintain familywise type I error for the study at one-sided 2.5\%.
+
+
+# Consider 2 different designs:
+
+1.	Equal allocation to four arms throughout design.
+2.	RAR where the allocation probability is updated at an interim analysis as follows:
+
+* $V_t = P_t$ (Max)
+* $V_0 = min\{\sum V_t \frac{(n_t + 1)}{(n_0 + 1)}, max(V_1, V_2, V_3) \}$
+
+$V_0, V_1, V_2,$ and $V_3$ are renormalized to sum to 1 and are allocation probabilities.
+
+Note: A way to estimate $P_t$(Max) is to `cbind` K = [1000] draws from the posterior distribution of each arm and to see how frequently (across the K draws from each arm) each arm is drawn to be the largest.
+
+
+# Lab task:
+
+Write a function for each study design to simulate one trial.  
+
+* N = 228 with interim analyses after every 40th participant starting at 40.
+* Use equal allocation for first 40 patients for both designs.
+* Assume a setting where treatment effect is 0.35 for each study arm (the null scenario).  (But allow flexibility in function for other treatment effects).
+* $\alpha_t = 0.35$ for all $t$ and $\beta_t = 0.65$ for all arms.
+* Use the following $\delta$ thresholds to determine a successful trial:
+  * Design 1, $\delta = 0.9912$
+  * Design 2, $\delta = 0.9892$
+
+For simplicity, have your function return a list of at least the following output:
+
+1. The probability that the best treatment arm is better than control.
+2. The number of patients assigned to each treatment arm.
+
+# Design 1 : Equal allocation to four arms throughout design.
+
+```{r}
+
+
+N <- 228 ## subjects
+
+t <- 0:3 ## 4 arms
+
+id <- 1:228
+
+trt <- rep(0:3,228/4)
+
+treat_effect <- 0.35
+
+nt <- N/4
+
+out_0 <- as.numeric(purrr::rbernoulli(N,treat_effect))
+
+dat <- data.frame(id = id,arm = trt,Yi = out_0)
+
+
+alpha_T <- 0.35
+
+beta_T <- 0.65
+
+
+delta <- 0.9912
+  
+
+
+# posterior
+
+Design.one <- function(alph, bet, data, N_t,delta){
+  
+  postr <- matrix(nrow = 1000,ncol = 4)
+  
+  for(trtt in 1:4){
+    dts <- data %>% filter(arm==trtt-1)
+    alpha <- alph + sum(dts$Yi)
+    beta <- bet + N_t - sum(dts$Yi)
+    pt <- rbeta(1000,alpha, beta)
+    
+    postr[,trtt] <- pt
+    
+  }
+  
+  
+  
+  colnames(postr) <- c(0:3)
+  
+  Prob <- c("Pr(p_1 > p_0)" = mean(postr[,"1"]>postr[,"0"]),
+            "Pr(p_2 > p_0)"= mean(postr[,"2"]>postr[,"0"]),
+            "Pr(p_3 > p_0)" = mean(postr[,"3"]>postr[,"0"]))
+  
+  Design_1_success <- max(Prob) > delta
+  
+  n_t_s <- rep(N_t,4)
+  
+  names(n_t_s) <- c(0:3)
+  
+  
+  outs <- list(Probs = Prob, Patients = n_t_s,
+               Design.Sucessfull = Design_1_success)
+  
+  return(outs)
+}
+
+
+
+Design.one(alph = alpha_T,bet = beta_T,data = dat,N_t = nt, delta = delta)
+
+
+```
+
+
+
+# Design 2 : RAR where the allocation probability is updated at an interim analysis
+
+
+```{r}
+
+
+Posterior.draw <- function(alpha_t,beta_t,Y_t,draws) {
+  n <- length(Y_t)
+  rbeta(draws, alpha_t + sum(Y_t), beta_t + n - sum(Y_t))
+}
+
+V_0 <- function(V_t, n_t) {
+  min(sum(V_t[-1] * (n_t[-1] + 1) / (rep(n_t[1], 3) + 1)), max(V_t[-1]))
+}
+
+RAR <- function(N, seed = 101, draws, alpha_t, beta_t, trt.eff) {
+  set.seed(seed)
+  
+  n_t <- rep(10, 4)
+  Y <- matrix(rbinom(sum(n_t), 1, trt.eff), ncol = 4)
+  colnames(Y) <- c("0", "1", "2", "3")
+  
+  P_t <- t(apply(Y, 2, function(y_t) Posterior.draw(alpha_t, beta_t, Y_t = y_t, draws)))
+  
+  P_t$max <- apply(P_t, 1, which.max)
+  V_t <- prop.table(table(P_t$max))
+  V_t[1] <- V_0(V_t, n_t)
+  V_t <- V_t / sum(V_t)
+  
+  N <- N - 40
+  
+  while (N > 0) {
+    new.allocate <- sample(0:3, N, prob = V_t)
+    n_t <- n_t + table(new.allocate)
+    Y_new <- matrix(rbinom(sum(n_t), 1, trt.eff), ncol = 4)
+    colnames(Y_new) <- c("0", "1", "2", "3")
+    Y <- cbind(Y, Y_new)
+    P_t <- t(apply(Y, 2, function(y_t) Posterior.draw(alpha_t, beta_t, Y_t = y_t, draws)))
+    P_t$max <- apply(P_t, 1, which.max)
+    V_t <- prop.table(table(P_t$max))
+    V_t[1] <- V_0(V_t, n_t)
+    V_t <- V_t / sum(V_t)
+    N <- N - 40
+  }
+  
+  pair.compare <- apply(P_t[, c("1", "2", "3")], 2, function(i) mean(i > P_t$"0"))
+  success <- ifelse(max(pair.compare) > 0.5, "Yes", "No")
+  success.threshold <- ifelse(max(pair.compare) > 0.9892, "Yes", "No")
+  
+  list(success = success, success.threshold = success.threshold, 
+       ProbBest = max(pair.compare), N = N)
+}
+
+#RAR()
+
+```
+
+
+
+# If you have more time
+
+* Replicate the design many (10K) times.  Calculate the Type I error.
+* Find $\delta$ for each design (supposing you didn't already know it).
+* Replicate the study design assuming treatment effects of 
+  * $p_0 = p_1 = p_2 = 0.35$
+  * $p_3 = 0.65$
+
+
+

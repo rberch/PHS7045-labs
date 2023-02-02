@@ -1,0 +1,79 @@
+---
+title: "Lab 02"
+author: "Ransmond Berchie"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+```
+
+
+
+
+```{r}
+
+
+N <- 228 ## subjects
+
+t <- 0:3 ## 4 arms
+
+id <- 1:228
+
+trt <- rep(0:3,228/4)
+
+treat_effect <- 0.35
+
+nt <- N/4
+
+out_0 <- as.numeric(purrr::rbernoulli(N,treat_effect))
+
+dat <- data.frame(id = id,arm = trt,Yi = out_0)
+
+
+alpha_T <- 0.35
+
+beta_T <- 0.65
+
+postr <- matrix(nrow = 1000,ncol = 4)
+  
+
+
+# posterior
+
+for(trtt in 1:4){
+  dts <- dat %>% filter(arm==trtt-1)
+  alpha <- alpha_T + sum(dts$Yi)
+  beta <- beta_T + nt - sum(dts$Yi)
+  pt <- rbeta(1000,alpha, beta)
+  
+  postr[,trtt] <- pt
+  
+}
+
+colnames(postr) <- c(0:3)
+
+Prob <- c("Pr(p_1 > p_0)" = mean(postr[,"1"]>postr[,"0"]),
+          "Pr(p_2 > p_0)"= mean(postr[,"2"]>postr[,"0"]),
+          "Pr(p_3 > p_0)" = mean(postr[,"3"]>postr[,"0"])) ; Prob
+
+delta <- 0.9912
+
+Design_1_success <- max(Prob) > delta
+
+```
+
+
+
+```{r}
+
+```
+
