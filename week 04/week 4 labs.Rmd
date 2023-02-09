@@ -1,0 +1,84 @@
+---
+title: "RCpp week 4"
+author: "Ransmond Berchie"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+#install.packages("Rcpp")
+library(Rcpp)
+```
+
+
+```{r}
+Rcpp::cppFunction('
+int myfun(const NumericVector & x)
+{
+  int i = 0;
+  for (auto & x_ : x)
+    Rprintf("The value of x[%i] is: %.2f\\n", i++, x_);
+  
+  return 0;
+}')
+
+myfun(c(1, .12, 3))
+```
+
+
+
+# Fibonacci Series code
+
+```{r}
+
+# In R
+
+fibR <- function(n) {
+  if (n <= 1)
+    return(n)
+  fibR(n - 1) + fibR(n - 2)
+}
+
+# Is it working?
+c(
+  fibR(0), fibR(1), fibR(2),
+  fibR(3), fibR(4), fibR(5),
+  fibR(6)
+)
+
+fibR(20)
+```
+```{r}
+# In C++ using RCpp library in R
+
+#library(Rcpp)
+
+Rcpp::cppFunction('
+int fibCpp(int n) {
+  if (n <= 1)
+    return n;
+  return fibCpp(n - 1) + fibCpp(n - 2);
+}
+
+')
+```
+
+
+
+```{r}
+# Creating the function as a C++ file and sourcing it
+# fibo.cpp
+# Rcpp::sourceCpp("week 04/fibo.cpp")
+
+bench::mark(fibR(20), fibRcp(20),fibCpp(20), relative = TRUE)
+
+#fibRcp(50)
+```
+
+
