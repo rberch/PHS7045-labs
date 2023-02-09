@@ -18,7 +18,7 @@ The goal is simple: write out a C++ function with Rcpp and measure
 how faster it is compared to the following R implementation:
 
 
-```r
+```{r}
 ps_matchR <- function(x) {
   
   match_expected <- as.matrix(dist(x))
@@ -31,7 +31,15 @@ ps_matchR <- function(x) {
   )
   
 }
+
+set.seed(123)
+xd <- runif(5)
+ans <- ps_matchR(xd)
+
+cbind(xd,ans[1],ans[2])
 ```
+
+
 
 ## Question 1: Create a simple function
 
@@ -63,6 +71,13 @@ using namespace Rcpp;
 
 }
 ```
+
+```{r}
+
+```
+
+
+
 
 
 ## Question 2: Things can be done faster
